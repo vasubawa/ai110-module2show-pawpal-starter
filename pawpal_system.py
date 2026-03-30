@@ -196,11 +196,22 @@ class Owner:
     def remove_pet(self, pet_id: str) -> None:
         self.pets = [p for p in self.pets if p.pet_id != pet_id]
 
-    def get_tasks(self, day: date) -> List[TaskOccurrence]:
+    def get_tasks(self, day: date, pet_names: Optional[List[str]] = None, statuses: Optional[List[str]] = None) -> List[TaskOccurrence]:
+        """Return task occurrences for the given day.
+
+        Optional filters:
+        - pet_names: list of pet names to include (by name)
+        - statuses: list of statuses to include (e.g. ['scheduled', 'completed'])
+        """
         occs: List[TaskOccurrence] = []
         for pet in self.pets:
+            if pet_names and pet.name not in pet_names:
+                continue
             occs.extend(pet.list_upcoming_from(day, days=1))
+        if statuses:
+            occs = [o for o in occs if o.status in statuses]
         return occs
+
 
 
 @dataclass
@@ -281,12 +292,8 @@ class Scheduler:
 
     def generate_daily_plan(self, owner: Owner, day: date) -> DailyPlan:
         occurrences = owner.get_tasks(day)
-        # sort by priority desc, then start_time asc
-        def sort_key(o: TaskOccurrence) -> Tuple[int, time]:
-            start = o.start_time or time(9, 0)
-            return (-o.priority, start)
-
-        occurrences = sorted(occurrences, key=sort_key)
+        # sort chronologically, tie-breaking by higher priority for same start time
+        occurrences = self.sort_by_time(occurrences)
 
         scheduled: List[TaskOccurrence] = []
         explanations: Dict[str, str] = {}
@@ -319,6 +326,36 @@ class Scheduler:
                     conflicts.append((occurrences[i], occurrences[j]))
         return conflicts
 
+    def sort_by_time(self, occurrences: List[TaskOccurrence]) -> List[TaskOccurrence]:
+        """Sort occurrences by start time (earlier first). If start times are equal,
+        prefer higher priority. Accepts `start_time` as `datetime.time` or string 'HH:MM'.
+
+        Example key using `sorted(..., key=lambda o: (parse_time(o.start_time), -o.priority))`.
+        """
+        def parse_time_val(t):
+            if t is None:
+                return time(23, 59)
+            if isinstance(t, str):
+                try:
+                    h, m = map(int, t.split(":"))
+                    return time(h, m)
+                except Exception:
+                    return time(23, 59)
+            return t
+
+        """Return a new list of occurrences sorted by start time ascending.
+
+        Occurrences without a start time are treated as late in the day. If two
+        occurrences share the same start time, the one with higher `priority`
+        will come first.
+
+        The method accepts `TaskOccurrence.start_time` values that are either
+        `datetime.time` objects or strings in `HH:MM` format; malformed strings
+        are treated as missing times.
+        """
+
+        return sorted(occurrences, key=lambda o: (parse_time_val(o.start_time), -o.priority))
+
     def resolve_conflicts(self, occurrences: List[TaskOccurrence]) -> List[TaskOccurrence]:
         # Simple greedy resolution using priority then start time
         occurrences = sorted(occurrences, key=lambda o: (-o.priority, o.start_time or time(9, 0)))
@@ -328,6 +365,79 @@ class Scheduler:
                 continue
             scheduled.append(occ)
         return scheduled
+
+    def mark_occurrence_complete(self, owner: Owner, occurrence: TaskOccurrence) -> Optional[TaskOccurrence]:
+        """Mark an occurrence complete. If the underlying Task has a daily or weekly recurrence,
+        create a new one-off Task for the next occurrence date and add it to the pet's tasks.
+
+        Returns the newly created TaskOccurrence if one was made, otherwise None.
+        """
+                """Mark a `TaskOccurrence` as completed and, for supported recurrence
+                rules, auto-create the next one-off task occurrence.
+
+                Behavior:
+                - Marks the provided `occurrence` status to `completed`.
+                - If the source `Task` has a `RecurrenceRule` with `freq` equal to
+                    "daily" or "weekly", computes the next date using `timedelta` and
+                    creates a new one-off `Task` scheduled for that date. The new task is
+                    attached to the same `Pet` and a `TaskOccurrence` for that date is
+                    returned.
+                - If the recurrence has an `end_date` that is before the next date, no
+                    new task is created.
+
+                Returns the new `TaskOccurrence` when created, otherwise `None`.
+                """
+
+                occurrence.mark_complete()
+
+        # locate the Task and Pet that own this occurrence
+        source_task: Optional[Task] = None
+        source_pet: Optional[Pet] = None
+        for pet in owner.pets:
+            for t in pet.tasks:
+                if t.task_id == occurrence.task_id:
+                    source_task = t
+                    source_pet = pet
+                    break
+            if source_task:
+                break
+
+        if not source_task or not source_task.recurrence:
+            return None
+
+        freq = (source_task.recurrence.freq or "").lower()
+        if freq not in ("daily", "weekly"):
+            return None
+
+        # compute next date using timedelta
+        if freq == "daily":
+            next_date = occurrence.date + timedelta(days=1 * (source_task.recurrence.interval or 1))
+        else:
+            # weekly
+            next_date = occurrence.date + timedelta(weeks=1 * (source_task.recurrence.interval or 1))
+
+        # respect end_date on recurrence
+        if source_task.recurrence.end_date and next_date > source_task.recurrence.end_date:
+            return None
+
+        # create a new one-off Task instance for the next date
+        new_task = Task(
+            task_id=str(uuid.uuid4()),
+            title=source_task.title,
+            duration_minutes=source_task.duration_minutes,
+            priority=source_task.priority,
+            scheduled_date=next_date,
+            time_window_start=source_task.time_window_start,
+            time_window_end=source_task.time_window_end,
+            notes=f"Auto-created from recurring task {source_task.task_id}",
+        )
+
+        # add to the pet's tasks
+        if source_pet:
+            source_pet.add_task(new_task)
+
+        occs = new_task.to_occurrences(next_date, next_date)
+        return occs[0] if occs else None
 
     def explain_plan(self, plan: DailyPlan) -> str:
         lines: List[str] = []

@@ -22,6 +22,22 @@ Your final app should:
 - Display the plan clearly (and ideally explain the reasoning)
 - Include tests for the most important scheduling behaviors
 
+## Smarter Scheduling
+
+This project includes several small algorithmic improvements to make
+the scheduler more useful:
+
+- Chronological sorting of task occurrences with a priority tie-breaker (`sort_by_time`).
+- Filtering of occurrences by pet name and by status via `Owner.get_tasks`.
+- Basic conflict detection and greedy conflict resolution: higher-priority
+	occurrences are kept when overlaps occur, and lower-priority ones are
+	skipped.
+- Automatic creation of the next one-off occurrence when a daily/weekly
+	recurring task is completed (`Scheduler.mark_occurrence_complete`).
+
+These features keep the demo deterministic and easy to reason about while
+providing a better user experience than a purely manual list of tasks.
+
 ## Getting started
 
 ### Setup
