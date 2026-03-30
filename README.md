@@ -72,3 +72,18 @@ What the tests cover:
 - Conflict detection: ensures overlapping `TaskOccurrence`s are detected by `Scheduler.detect_conflicts` and handled by the planner.
 
 Confidence Level: ★★★★☆ — Tests cover main flows and recurrence/conflict logic; additional edge-case tests (malformed times, complex `byweekday` patterns, availability constraints) would increase confidence.
+
+## Features
+
+- **Sorting by time:** chronological ordering of `TaskOccurrence`s with missing or malformed times treated as late in the day (`Scheduler.sort_by_time`).
+- **Priority tie-breaker:** when two tasks share the same start time, the scheduler prefers higher-priority items.
+- **Conflict detection & warnings:** raw occurrences are analyzed for overlaps and conflicts are surfaced to the user (`Scheduler.detect_conflicts`).
+- **Greedy conflict resolution:** the planner keeps higher-priority occurrences and skips lower-priority conflicting items (`Scheduler.resolve_conflicts` / `generate_daily_plan`).
+- **Recurring tasks & expansion:** support for daily and weekly recurrence rules and automatic creation of the next one-off occurrence when a recurrence is completed (`RecurrenceRule`, `Task.to_occurrences`, `Scheduler.mark_occurrence_complete`).
+- **Owner & pet filtering:** `Owner.get_tasks` can filter occurrences by pet name and by status.
+- **Explanations & export:** `DailyPlan` includes short explanations for why items were chosen; placeholder hooks exist for iCalendar export and notifications.
+- **Automated tests:** unit tests verify sorting, recurrence behavior, and conflict detection (see `tests/`).
+
+## 📸 Demo
+
+<a href="/image.png" target="_blank"><img src='/image.png' title='PawPal App' width='' alt='PawPal App' class='center-block' /></a>
