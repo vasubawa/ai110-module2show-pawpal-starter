@@ -57,3 +57,18 @@ pip install -r requirements.txt
 5. Add tests to verify key behaviors.
 6. Connect your logic to the Streamlit UI in `app.py`.
 7. Refine UML so it matches what you actually built.
+
+## Testing PawPal+
+
+Run the automated test suite to verify core scheduling behaviors:
+
+```bash
+python -m pytest
+```
+
+What the tests cover:
+- Sorting correctness: verifies chronological ordering and priority tie-breaking in `Scheduler.sort_by_time`.
+- Recurrence logic: confirms that completing a daily recurring task creates the next day's one-off occurrence via `Scheduler.mark_occurrence_complete`.
+- Conflict detection: ensures overlapping `TaskOccurrence`s are detected by `Scheduler.detect_conflicts` and handled by the planner.
+
+Confidence Level: ★★★★☆ — Tests cover main flows and recurrence/conflict logic; additional edge-case tests (malformed times, complex `byweekday` patterns, availability constraints) would increase confidence.

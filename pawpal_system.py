@@ -372,23 +372,7 @@ class Scheduler:
 
         Returns the newly created TaskOccurrence if one was made, otherwise None.
         """
-                """Mark a `TaskOccurrence` as completed and, for supported recurrence
-                rules, auto-create the next one-off task occurrence.
-
-                Behavior:
-                - Marks the provided `occurrence` status to `completed`.
-                - If the source `Task` has a `RecurrenceRule` with `freq` equal to
-                    "daily" or "weekly", computes the next date using `timedelta` and
-                    creates a new one-off `Task` scheduled for that date. The new task is
-                    attached to the same `Pet` and a `TaskOccurrence` for that date is
-                    returned.
-                - If the recurrence has an `end_date` that is before the next date, no
-                    new task is created.
-
-                Returns the new `TaskOccurrence` when created, otherwise `None`.
-                """
-
-                occurrence.mark_complete()
+        occurrence.mark_complete()
 
         # locate the Task and Pet that own this occurrence
         source_task: Optional[Task] = None
